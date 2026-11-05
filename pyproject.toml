@@ -1,16 +1,16 @@
 [project]
 name = "lemmy-daily-digest"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "Rassegna Stampa"
 authors = [
-    { name = "linuzzz", email = "pabrizzo@gmail.com" }
+    { name = "macchia", email = "pabrizzo@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
     "google-api-python-client>=2.201.0",
     "google-auth-httplib2>=0.4.4",
     "google-auth-oauthlib>=1.5.0",
+    "trafilatura>=2.3.1",
 ]
 
 [project.scripts]
@@ -19,3 +19,9 @@ lemmy-daily-digest = "lemmy_daily_digest:main"
 [build-system]
 requires = ["uv_build>=0.12.19,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "workers-py>=1.17.9",
+    "workers-runtime-sdk>=1.9.6",
+]

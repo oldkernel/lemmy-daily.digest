@@ -225,3 +225,224 @@ Non carichiamo ancora i segreti su Cloudflare: prima voglio verificare che il pr
 Quando hai eseguito `pywrangler init`, incollami l'output del terminale (puoi oscurare eventuali identificativi personali). Poi configureremo i segreti Gmail e le risorse Cloudflare.
 
 Una nota: il Cron Trigger di Cloudflare usa l'ora UTC. Dovremo quindi gestire il passaggio tra ora solare e legale per mantenere l'invio alle 07:30 italiane.
+
+# Step 4
+
+Perfetto!
+Pywrangler funzionante
+
+Abbiamo quindi:
+
+- Progetto `lemmy-daily-digest` creato.
+- Python 3.12 configurato con `uv`.
+- `workers-py` e `workers-runtime-sdk` installati.
+- Comando `pywrangler` funzionante tramite `uv run`.
+- Credenziali Gmail OAuth e refresh token generati.
+
+Prossimo passo: configurare il Worker Cloudflare.
+
+Prima creiamo la struttura del progetto e il file `wrangler.jsonc`, poi configureremo:
+
+1. Il Cron Trigger per le 07:30.
+2. Il binding KV per memorizzare i post già elaborati.
+3. I segreti OAuth Gmail.
+4. L'accesso a Workers AI per generare le sintesi in italiano.
+
+# Step 5
+
+`uv run pywrangler dev`
+Il primo richiede qualche minuto perché Pywrangler prepara l'ambiente Pyodide e le dipendenze.
+
+-> Ricordare che uv è installato come pacchetto Fedora e va aggiornato con DNF eventualmente
+
+Adesso verifichiamo anche la parte più importante per il nostro progetto: l'esecuzione del metodo `scheduled()`, che domani dovrà avviare automaticamente la rassegna.
+
+### 1. Riavvia con il supporto ai test Cron
+
+Nel terminale dove gira il server premi `Ctrl+C`, poi esegui:
+
+```
+uv run pywrangler dev --test-scheduled
+```
+
+### 2. Simula un'esecuzione programmata
+
+Apri un secondo terminale e lancia:
+
+```
+curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*"
+```
+
+Cloudflare prevede questo endpoint per testare i Cron Trigger dei Python Workers.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://developers.cloudflare.com\&sz=32)
+
+Cloudflare Workers docs+2
+
+
+
+### 3. Controlla il primo terminale
+
+Dovresti vedere il messaggio:
+
+```
+Lemmy Daily Digest: scheduled event received
+```
+
+Se compare, abbiamo verificato che il metodo `scheduled()` funziona.
+
+# Step 6
+
+Perfetto!&#x20;
+
+Test superato
+
+
+
+Abbiamo verificato che:
+
+- Il Worker Python si avvia correttamente.
+- Pywrangler gestisce l'ambiente.
+- Il metodo `scheduled()` viene eseguito quando riceve un evento programmato.
+
+Ora possiamo passare a Cloudflare.
+
+### Prossimo passo: autenticazione
+
+```
+uv run pywrangler login
+```
+3\. Si aprirà il browser: accedi al tuo account Cloudflare e autorizza Pywrangler.
+
+Quando torni al terminale, esegui:
+
+```
+uv run pywrangler whoami
+```
+
+Dovresti vedere il tuo account Cloudflare.
+
+Fermiamoci lì e dimmi se l'autenticazione è riuscita. Nel passaggio successivo creeremo il namespace KV `LEMMy_CACHE` e lo collegheremo al Worker. Useremo il binding KV per evitare di elaborare ripetutamente gli stessi post.
+
+Una nota: il Cron Trigger è già configurato, ma ricontrolleremo l'orario prima del deploy, così da garantire le 07:30 italiane anche nei giorni del cambio dell'ora legale.
+-> Il cron è definito in wrangler.jsonc
+
+
+# Step 7
+
+Perfetto. Creiamo adesso lo spazio KV su Cloudflare: sarà il piccolo archivio in cui il Worker conserverà gli identificativi dei post già elaborati, evitando duplicati nelle rassegne successive.
+
+### 1. Crea il namespace KV
+
+Dalla directory del progetto, esegui:
+
+```
+uv run pywrangler kv namespace create LEMMY_CACHE
+```
+
+Se il comando va a buon fine, Cloudflare restituirà un identificativo simile a:
+
+```
+id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+La documentazione Cloudflare descrive questo comando per creare un namespace KV.
+
+
+Quando termina, incollami l'output, in particolare il namespace ID. Non serve condividere alcuna credenziale. Poi lo inseriremo in `wrangler.jsonc` per collegare il KV al Worker.
+
+-> Questo id va poi messo in wrangler.jsonc
+
+# Step 8 - Le credenziali !!!
+
+Ottimo! Il binding KV è riconosciuto e il Worker parte correttamente. Adesso configuriamo le tre credenziali Gmail come Secrets di Cloudflare.
+
+Ci servono:
+
+- `GMAIL_CLIENT_ID`
+- `GMAIL_CLIENT_SECRET`
+- `GMAIL_REFRESH_TOKEN`
+
+In questo modo non saranno contenute né in `entry.py` né in `wrangler.jsonc`.
+
+### 1. Recupera i valori sul tuo Fedora
+
+Dalla directory del progetto, esegui questi comandi uno alla volta:
+
+```
+jq -r '.installed.client_id' credentials.json
+```
+
+```
+jq -r '.installed.client_secret' credentials.json
+```
+
+```
+jq -r '.refresh_token' token.json
+```
+
+Se `jq` non è installato:
+
+```
+sudo dnf install jq
+```
+
+I valori appariranno nel terminale: non incollarli qui e non inserirli in file di codice.
+
+### 2. Carica i tre Secrets su Cloudflare
+
+Esegui il primo comando:
+
+```
+uv run pywrangler secret put GMAIL_CLIENT_ID
+```
+
+Quando compare la richiesta del valore, incolla il `client_id` recuperato prima e premi Invio.
+
+Ripeti per gli altri due:
+
+```
+uv run pywrangler secret put GMAIL_CLIENT_SECRET
+```
+
+```
+uv run pywrangler secret put GMAIL_REFRESH_TOKEN
+```
+
+Ogni comando ti chiederà il valore da inserire. Incollalo direttamente nel terminale.
+
+### 3. Cosa abbiamo ottenuto
+
+Cloudflare conserverà le credenziali in modo protetto e le renderà disponibili al Worker attraverso l'oggetto `env`.
+
+Una precisazione: questi Secrets sono caricati su Cloudflare, non automaticamente nell'ambiente locale `pywrangler dev`. Per i test locali predisporremo successivamente un file `.dev.vars` protetto e ignorato da Git.
+
+Fermiamoci quando hai caricato tutti e tre i Secrets. Dimmi se i tre comandi sono terminati correttamente; non serve mostrarmi i valori.
+
+Queste variabili le mettiamo anche in .dev.vars
+Cloudflare utilizza proprio .dev.vars per fornire i Secrets durante lo sviluppo locale.
+
+# Step 9 - Proviamo a mandare un mail
+
+In locale dopo avere modificato entry.py:
+
+`uv run pywrangler dev --test-scheduled`
+
+e 
+
+`curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*"`
+
+Dovrebbe fare arrivare una mail su gmail.
+
+# Step 10
+
+0. Recupero dei post dalla community Lemmy
+1. Recupera l'URL dell'articolo originale.
+2. Scarica la pagina web.
+3. Estrae il testo principale, eliminando menu, pubblicità e contenuti accessori.
+4. Conserva titolo, fonte e URL originale.
+5. Gestisce gli articoli non accessibili senza bloccare tutta la rassegna.
+
+Il punto 3 è complesso, usiamo la libreria:
+`uv add trafilatura`
+

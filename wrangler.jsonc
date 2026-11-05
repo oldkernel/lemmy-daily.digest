@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lemmy-daily-digest",
+  "main": "src/entry.py",
+  "compatibility_date": "2026-11-05",
+  "compatibility_flags": [
+    "python_workers"
+  ],
+  "kv_namespaces": [
+  {
+    "binding": "LEMMY_CACHE",
+    "id": "dd0944bef52249bda1722e83e93ab580"
+  }
+  ],
+  "ai": {
+  "binding": "AI"
+  },
+  "triggers": {
+    "crons": [
+      "30 6 * nov,dec,jan,feb,mar *",
+      "30 5 * apr,may,jun,jul,aug,sep,oct *"
+    ]
+  },
+  "observability": {
+    "enabled": true
+  }
+}
